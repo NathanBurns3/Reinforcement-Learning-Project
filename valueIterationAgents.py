@@ -62,7 +62,21 @@ class ValueIterationAgent(ValueEstimationAgent):
     def runValueIteration(self):
         # Write value iteration code here
         "*** YOUR CODE HERE ***"
-
+        # Iterate over the number of iterations
+        for i in range(self.iterations):
+            # Copy the current values to a new variable
+            newValues = self.values.copy()
+            # Iterate over all states in the Markov Decision Process (MDP)
+            for state in self.mdp.getStates():
+                # If the state is a terminal state, skip to the next iteration
+                if self.mdp.isTerminal(state):
+                    continue
+                # Compute the best action based on the current values
+                bestAction = self.computeActionFromValues(state)
+                # Compute the Q-value for the state and the best action, and update the new values
+                newValues[state] = self.computeQValueFromValues(state, bestAction)
+            # Update the values with the new values
+            self.values = newValues
 
     def getValue(self, state):
         """
@@ -77,7 +91,17 @@ class ValueIterationAgent(ValueEstimationAgent):
           value function stored in self.values.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # Initialize the Q-value to 0
+        qValue = 0
+
+        # Iterate over all possible next states and their probabilities given the current state and action
+        for nextState, prob in self.mdp.getTransitionStatesAndProbs(state, action):
+            # Update the Q-value based on the reward for the current state, action, and next state,
+            # as well as the discounted value of the next state
+            qValue += prob * (self.mdp.getReward(state, action, nextState) + self.discount * self.values[nextState])
+
+        # Return the computed Q-value
+        return qValue
 
     def computeActionFromValues(self, state):
         """
@@ -89,7 +113,26 @@ class ValueIterationAgent(ValueEstimationAgent):
           terminal state, you should return None.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # Check if the state is a terminal state
+        if self.mdp.isTerminal(state):
+            # If it is, return None as there are no actions to take in a terminal state
+            return None
+
+        # Initialize the best action to None and the best Q-value to negative infinity
+        bestAction = None
+        bestQValue = float('-inf')
+
+        # Iterate over all possible actions in the current state
+        for action in self.mdp.getPossibleActions(state):
+            # Compute the Q-value for the current state and action
+            qValue = self.computeQValueFromValues(state, action)
+            # If the computed Q-value is better than the current best Q-value, update the best action and Q-value
+            if qValue > bestQValue:
+                bestQValue = qValue
+                bestAction = action
+
+        # Return the best action
+        return bestAction
 
     def getPolicy(self, state):
         return self.computeActionFromValues(state)
@@ -130,6 +173,23 @@ class AsynchronousValueIterationAgent(ValueIterationAgent):
 
     def runValueIteration(self):
         "*** YOUR CODE HERE ***"
+        # Get all states from the Markov Decision Process (MDP)
+        states = self.mdp.getStates()
+
+        # Iterate over the number of iterations
+        for i in range(self.iterations):
+            # Select a state from the list of states, wrapping around if the number of iterations exceeds the number of states
+            state = states[i % len(states)]
+            
+            # If the state is a terminal state, skip to the next iteration
+            if self.mdp.isTerminal(state):
+                continue
+            
+            # Compute the best action based on the current values
+            bestAction = self.computeActionFromValues(state)
+            
+            # Compute the Q-value for the state and the best action, and update the value of the state
+            self.values[state] = self.computeQValueFromValues(state, bestAction)
 
 class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
     """
@@ -150,4 +210,51 @@ class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
 
     def runValueIteration(self):
         "*** YOUR CODE HERE ***"
+        # Initialize a dictionary to store the predecessors of each state
+        predecessors = {}
 
+        # Iterate over all states in the Markov Decision Process (MDP)
+        for state in self.mdp.getStates():
+            # Initialize the set of predecessors for the current state
+            predecessors[state] = set()
+
+        # Iterate over all states in the MDP again
+        for state in self.mdp.getStates():
+            # Iterate over all possible actions in the current state
+            for action in self.mdp.getPossibleActions(state):
+                # Iterate over all possible next states and their probabilities given the current state and action
+                for nextState, _ in self.mdp.getTransitionStatesAndProbs(state, action):
+                    # Add the current state to the set of predecessors of the next state
+                    predecessors[nextState].add(state)
+
+        # Initialize a priority queue to store states based on their value difference
+        queue = util.PriorityQueue()
+
+        # Iterate over all states in the MDP again
+        for state in self.mdp.getStates():
+            # If the state is not a terminal state
+            if not self.mdp.isTerminal(state):
+                # Compute the difference between the current value of the state and the maximum Q-value for any action in the state
+                diff = abs(self.values[state] - max([self.computeQValueFromValues(state, action) for action in self.mdp.getPossibleActions(state)]))
+                # Add the state to the queue with priority equal to the negative difference (so states with larger differences are dequeued first)
+                queue.push(state, -diff)
+
+        # Iterate over the number of iterations
+        for _ in range(self.iterations):
+            # If the queue is empty, break the loop
+            if queue.isEmpty():
+                break
+            # Dequeue a state from the queue
+            state = queue.pop()
+            # If the state is not a terminal state
+            if not self.mdp.isTerminal(state):
+                # Update the value of the state to the maximum Q-value for any action in the state
+                self.values[state] = max([self.computeQValueFromValues(state, action) for action in self.mdp.getPossibleActions(state)])
+            # Iterate over all predecessors of the state
+            for predecessor in predecessors[state]:
+                # Compute the difference between the current value of the predecessor and the maximum Q-value for any action in the predecessor
+                diff = abs(self.values[predecessor] - max([self.computeQValueFromValues(predecessor, action) for action in self.mdp.getPossibleActions(predecessor)]))
+                # If the difference is greater than a threshold
+                if diff > self.theta:
+                    # Update the priority of the predecessor in the queue to the negative difference
+                    queue.update(predecessor, -diff)
