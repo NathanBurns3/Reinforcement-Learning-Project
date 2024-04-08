@@ -219,7 +219,6 @@ class ApproximateQAgent(PacmanQAgent):
          # Get the feature vector for the given state-action pair
         features = self.featExtractor.getFeatures(state, action)
         # Calculate the Q-value as the dot product of the weights and the feature vector
-        # Note: The '*' operator here performs the dot product operation
         return self.weights * features
 
     def update(self, state, action, nextState, reward):
@@ -227,7 +226,7 @@ class ApproximateQAgent(PacmanQAgent):
            Should update your weights based on transition
         """
         "*** YOUR CODE HERE ***"
-        # Get the feature vector for the current state-action pair
+        # Get the feature vector for the current state and action pair
         features = self.featExtractor.getFeatures(state, action)
 
         # Calculate the difference between the actual and the estimated Q-value
